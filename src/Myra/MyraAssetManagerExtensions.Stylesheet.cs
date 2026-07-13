@@ -6,6 +6,8 @@ using System.Collections.Generic;
 using System.Reflection;
 using System.Xml.Linq;
 using System.Globalization;
+using FontStashSharp;
+
 
 
 #if MONOGAME || FNA
@@ -51,6 +53,7 @@ namespace AssetManagementBase
 				existingTexture = result.Atlas.Texture;
 			}
 
+			var firstFont = string.Empty;
 			foreach (var el in fontsNode.Elements())
 			{
 				var font = new StylesheetFont
@@ -59,11 +62,24 @@ namespace AssetManagementBase
 					File = el.Attribute("File").Value
 				};
 
+				if (string.IsNullOrEmpty(firstFont))
+				{
+					firstFont = font.File;
+				}
+
 				if (font.File.EndsWith(".ttf") || font.File.EndsWith(".otf"))
 				{
 					font.Size = float.Parse(el.Attribute("Size").Value, CultureInfo.InvariantCulture);
-					var fontSystem = manager.LoadFontSystem(font.File, existingTexture: existingTexture,
-						existingTextureUsedSpace: result.Fonts.AtlasUsedSpace != null ? result.Fonts.AtlasUsedSpace.Value : Rectangle.Empty);
+
+					FontSystem fontSystem;
+					if (existingTexture != null && result.Fonts.AtlasUsedSpace != null && firstFont.Equals(font.File, StringComparison.CurrentCultureIgnoreCase))
+					{
+						fontSystem = manager.LoadFontSystem(font.File, existingTexture: existingTexture, existingTextureUsedSpace: result.Fonts.AtlasUsedSpace.Value);
+					} else
+					{
+						fontSystem = manager.LoadFontSystem(font.File);
+					}
+
 					font.Font = fontSystem.GetFont(font.Size.Value);
 				}
 				else if (font.File.EndsWith(".fnt"))

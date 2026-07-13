@@ -1,4 +1,6 @@
 using AssetManagementBase;
+using FontStashSharp;
+using Microsoft.Xna.Framework;
 using Myra.Graphics2D.UI;
 using Myra.Graphics2D.UI.Styles;
 using System.Xml.Linq;
@@ -11,6 +13,8 @@ namespace Myra.Tests
 	{
 		[Theory]
 		[InlineData("Stylesheets/Default/default_ui_skin.xmms", "allControlsBasic.xmmp")]
+		[InlineData("Stylesheets/Default/default_ui_skin_no_existing_texture.xmms", "allControlsBasic.xmmp")]
+		[InlineData("Stylesheets/Default/default_ui_skin_another_font.xmms", "allControlsBasic.xmmp")]
 		[InlineData("Stylesheets/Default/default_ui_skin_2x.xmms", "allControlsBasic.xmmp")]
 		[InlineData("Stylesheets/Commodore64/ui_stylesheet.xmms", "allControlsBasic.xmmp")]
 		[InlineData("Stylesheets/LibGDX/ui_stylesheet.xmms", "allControlsBasic.xmmp")]
@@ -109,6 +113,8 @@ namespace Myra.Tests
 
 		[Theory]
 		[InlineData("Stylesheets/Default/default_ui_skin.xmms")]
+		[InlineData("Stylesheets/Default/default_ui_skin_no_existing_texture.xmms")]
+		[InlineData("Stylesheets/Default/default_ui_skin_another_font.xmms")]
 		[InlineData("Stylesheets/Default/default_ui_skin_2x.xmms")]
 		[InlineData("Stylesheets/Commodore64/ui_stylesheet.xmms")]
 		[InlineData("Stylesheets/LibGDX/ui_stylesheet.xmms")]
@@ -131,6 +137,63 @@ namespace Myra.Tests
 
 			// Assert XML is semantically equal (ignoring attribute order)
 			Utility.AssertXmlEqual(originalDoc, resultDoc);
+		}
+
+		[Fact]
+		public void ExistingTexture()
+		{
+			var assetManager = Utility.CreateAssetManager();
+
+			// Load the stylesheet first
+			var stylesheet = assetManager.LoadStylesheet("Stylesheets/Default/default_ui_skin.xmms");
+
+			// Make sure the texture atlas and the font system use the same texture
+			var baseFont = stylesheet.Fonts["default-font"].Font;
+			Assert.IsType<DynamicSpriteFont>(baseFont);
+			var fontSystem = ((DynamicSpriteFont)baseFont).FontSystem;
+
+			Assert.Equal(new Rectangle(0, 0, 1024, 160), fontSystem.ExistingTextureUsedSpace);
+			Assert.Same(stylesheet.Atlas.Texture, fontSystem.ExistingTexture);
+		}
+
+		[Fact]
+		public void NoExistingTexture()
+		{
+			var assetManager = Utility.CreateAssetManager();
+
+			// Load the stylesheet first
+			var stylesheet = assetManager.LoadStylesheet("Stylesheets/Default/default_ui_skin_no_existing_texture.xmms");
+
+			// Make sure the texture atlas and the font system use the same texture
+			var baseFont = stylesheet.Fonts["default-font"].Font;
+			Assert.IsType<DynamicSpriteFont>(baseFont);
+			var fontSystem = ((DynamicSpriteFont)baseFont).FontSystem;
+
+			Assert.Null(fontSystem.ExistingTexture);
+		}
+
+		[Fact]
+		public void ExistingTextureAnotherFont()
+		{
+			var assetManager = Utility.CreateAssetManager();
+
+			// Load the stylesheet first
+			var stylesheet = assetManager.LoadStylesheet("Stylesheets/Default/default_ui_skin_another_font.xmms");
+
+			// Make sure the texture atlas and the font system use the same texture
+			var baseFont = stylesheet.Fonts["default-font"].Font;
+			Assert.IsType<DynamicSpriteFont>(baseFont);
+			var fontSystem = ((DynamicSpriteFont)baseFont).FontSystem;
+
+			Assert.Equal(new Rectangle(0, 0, 1024, 160), fontSystem.ExistingTextureUsedSpace);
+			Assert.Same(stylesheet.Atlas.Texture, fontSystem.ExistingTexture);
+
+			// Make sure the another font does not use the existing texture
+			var baseFont2 = stylesheet.Fonts["another-font"].Font;
+			Assert.IsType<DynamicSpriteFont>(baseFont2);
+			var fontSystem2 = ((DynamicSpriteFont)baseFont2).FontSystem;
+
+			Assert.Null(fontSystem2.ExistingTexture);
 		}
 	}
 }
