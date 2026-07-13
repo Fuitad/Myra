@@ -139,6 +139,27 @@ namespace Myra.Tests
 			Utility.AssertXmlEqual(originalDoc, resultDoc);
 		}
 
+		private FontSystem GetFontSystem(Stylesheet stylesheet, string id)
+		{
+			var baseFont = stylesheet.Fonts[id].Font;
+			Assert.IsType<DynamicSpriteFont>(baseFont);
+			return ((DynamicSpriteFont)baseFont).FontSystem;
+		}
+
+		private void AssertFontUsesExistingTexture(Stylesheet stylesheet, string id)
+		{
+			var fontSystem = GetFontSystem(stylesheet, id);
+
+			Assert.Equal(stylesheet.Fonts.AtlasUsedSpace, fontSystem.ExistingTextureUsedSpace);
+			Assert.Same(stylesheet.Atlas.Texture, fontSystem.ExistingTexture);
+		}
+
+		private void AssertFontDoesNotUseExistingTexture(Stylesheet stylesheet, string id)
+		{
+			var fontSystem = GetFontSystem(stylesheet, id);
+			Assert.Null(fontSystem.ExistingTexture);
+		}
+
 		[Fact]
 		public void ExistingTexture()
 		{
@@ -148,12 +169,8 @@ namespace Myra.Tests
 			var stylesheet = assetManager.LoadStylesheet("Stylesheets/Default/default_ui_skin.xmms");
 
 			// Make sure the texture atlas and the font system use the same texture
-			var baseFont = stylesheet.Fonts["default-font"].Font;
-			Assert.IsType<DynamicSpriteFont>(baseFont);
-			var fontSystem = ((DynamicSpriteFont)baseFont).FontSystem;
-
-			Assert.Equal(new Rectangle(0, 0, 1024, 160), fontSystem.ExistingTextureUsedSpace);
-			Assert.Same(stylesheet.Atlas.Texture, fontSystem.ExistingTexture);
+			AssertFontUsesExistingTexture(stylesheet, "default-font");
+			AssertFontUsesExistingTexture(stylesheet, "tooltip-font");
 		}
 
 		[Fact]
@@ -164,12 +181,9 @@ namespace Myra.Tests
 			// Load the stylesheet first
 			var stylesheet = assetManager.LoadStylesheet("Stylesheets/Default/default_ui_skin_no_existing_texture.xmms");
 
-			// Make sure the texture atlas and the font system use the same texture
-			var baseFont = stylesheet.Fonts["default-font"].Font;
-			Assert.IsType<DynamicSpriteFont>(baseFont);
-			var fontSystem = ((DynamicSpriteFont)baseFont).FontSystem;
-
-			Assert.Null(fontSystem.ExistingTexture);
+			// Make sure the texture atlas and the font system do not use the same texture
+			AssertFontDoesNotUseExistingTexture(stylesheet, "default-font");
+			AssertFontDoesNotUseExistingTexture(stylesheet, "tooltip-font");
 		}
 
 		[Fact]
@@ -180,20 +194,10 @@ namespace Myra.Tests
 			// Load the stylesheet first
 			var stylesheet = assetManager.LoadStylesheet("Stylesheets/Default/default_ui_skin_another_font.xmms");
 
-			// Make sure the texture atlas and the font system use the same texture
-			var baseFont = stylesheet.Fonts["default-font"].Font;
-			Assert.IsType<DynamicSpriteFont>(baseFont);
-			var fontSystem = ((DynamicSpriteFont)baseFont).FontSystem;
-
-			Assert.Equal(new Rectangle(0, 0, 1024, 160), fontSystem.ExistingTextureUsedSpace);
-			Assert.Same(stylesheet.Atlas.Texture, fontSystem.ExistingTexture);
-
-			// Make sure the another font does not use the existing texture
-			var baseFont2 = stylesheet.Fonts["another-font"].Font;
-			Assert.IsType<DynamicSpriteFont>(baseFont2);
-			var fontSystem2 = ((DynamicSpriteFont)baseFont2).FontSystem;
-
-			Assert.Null(fontSystem2.ExistingTexture);
+			// Make sure some font systems use existing texture and some do not
+			AssertFontUsesExistingTexture(stylesheet, "default-font");
+			AssertFontUsesExistingTexture(stylesheet, "tooltip-font");
+			AssertFontDoesNotUseExistingTexture(stylesheet, "another-font");
 		}
 	}
 }
