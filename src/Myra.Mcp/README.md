@@ -37,11 +37,13 @@ Point the root at your game's UI directory.
 
 | Tool | Parameters | Returns |
 |------|------------|---------|
-| `validate_layout` | `content` or `path` (one of), optional `assetRoot` | `{ valid, error?, widgetTree? }` |
+| `validate_layout` | `content` or `path` (one of), optional `assetRoot`, optional `stylesheetPath` | `{ valid, error?, widgetTree? }` |
 | `read_layout` | `path` | `{ raw, valid, error?, widgetTree? }` |
-| `save_layout` | `path`, `content`, optional `force` | `{ saved, valid, error?, path }` |
+| `save_layout` | `path`, `content`, optional `force`, optional `stylesheetPath` | `{ saved, valid, error?, path }` |
 | `list_widget_types` | (none) | `[ { name, baseType, role } ]` |
 | `describe_widget` | `name` | `{ name, properties, attachedProperties, styleNames }` |
+
+`stylesheetPath` (on `validate_layout` and `save_layout`) points at a `.xmms` stylesheet inside the root to validate against instead of the default skin. It is read-only validation context, so widgets and styles the layout references resolve against your game's stylesheet rather than Myra's built-in one.
 
 Result shapes:
 
