@@ -32,14 +32,14 @@ public class McpServerIntegrationTests
     }
 
     [Fact]
-    public async Task Server_exposes_exactly_the_five_tools()
+    public async Task Server_exposes_exactly_the_six_tools()
     {
         await using var client = await ConnectAsync();
 
         var names = (await client.ListToolsAsync()).Select(t => t.Name).OrderBy(n => n).ToArray();
 
         Assert.Equal(
-            new[] { "describe_widget", "list_widget_types", "read_layout", "save_layout", "validate_layout" },
+            new[] { "describe_widget", "inspect_stylesheet", "list_widget_types", "read_layout", "save_layout", "validate_layout" },
             names);
     }
 

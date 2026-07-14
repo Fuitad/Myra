@@ -14,6 +14,7 @@ builder.Logging.AddConsole(options => options.LogToStandardErrorThreshold = LogL
 builder.Services.AddSingleton(new MyraWorkspace(root));
 builder.Services.AddSingleton<LayoutService>();
 builder.Services.AddSingleton<WidgetCatalog>();
+builder.Services.AddSingleton<StylesheetService>();
 
 builder.Services
     .AddMcpServer()

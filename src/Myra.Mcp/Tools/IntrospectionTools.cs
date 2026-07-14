@@ -20,4 +20,11 @@ public static class IntrospectionTools
         [Description("The widget tag name, e.g. Button.")] string name)
         => catalog.DescribeWidget(name)
            ?? throw new System.ArgumentException($"Unknown widget '{name}'. Call list_widget_types to see valid tags.");
+
+    [McpServerTool(Name = "inspect_stylesheet")]
+    [Description("Inspect a stylesheet and its atlas: the named styles referenceable via a widget's StyleName (grouped by widget type), the font ids, and the atlas region (drawable) names. Omit 'stylesheetPath' to inspect the built-in default skin.")]
+    public static StylesheetInfo InspectStylesheet(
+        StylesheetService service,
+        [Description("Optional .xmms stylesheet path within the workspace root. Omit to inspect the built-in default skin.")] string? stylesheetPath = null)
+        => service.Inspect(stylesheetPath);
 }

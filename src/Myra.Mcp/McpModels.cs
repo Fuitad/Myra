@@ -35,3 +35,12 @@ public sealed record AttachedProperty(string Owner, string Name, string Syntax, 
 
 /// <summary>Full description of a widget: its settable properties, the attached properties available to it, and its style names.</summary>
 public sealed record WidgetDescription(string Name, WidgetProperty[] Properties, AttachedProperty[] AttachedProperties, string[] StyleNames);
+
+/// <summary>Read-only inspection of a stylesheet and its atlas.</summary>
+/// <param name="Styles">Named styles per widget type, referenceable via a widget's StyleName.</param>
+/// <param name="Fonts">Font ids the stylesheet defines.</param>
+/// <param name="AtlasRegions">Region (drawable) names in the stylesheet's texture atlas.</param>
+public sealed record StylesheetInfo(StyleGroup[] Styles, string[] Fonts, string[] AtlasRegions);
+
+/// <summary>The named styles defined for one widget type (e.g. Button) in a stylesheet.</summary>
+public sealed record StyleGroup(string Widget, string[] Names);

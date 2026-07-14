@@ -10,6 +10,7 @@ It runs anywhere .NET runs (including macOS) because it references `Myra.Platfor
 * Reads a layout back as a widget tree plus its raw XML.
 * Saves a layout, refusing to write anything the engine rejects (unless you force it).
 * Lists every widget tag and describes each widget's properties, enum options, defaults, attached properties (such as `Grid.Row`), and style names.
+* Inspects a stylesheet and its atlas: the named styles per widget, the font ids, and the atlas region (drawable) names an agent can reference.
 
 Layouts only (`.xmmp`) in this version. Stylesheets are used as read-only validation context.
 
@@ -42,6 +43,7 @@ Point the root at your game's UI directory.
 | `save_layout` | `path`, `content`, optional `force`, optional `stylesheetPath` | `{ saved, valid, error?, path }` |
 | `list_widget_types` | (none) | `[ { name, baseType, role } ]` |
 | `describe_widget` | `name` | `{ name, properties, attachedProperties, styleNames }` |
+| `inspect_stylesheet` | optional `stylesheetPath` | `{ styles, fonts, atlasRegions }` |
 
 `stylesheetPath` (on `validate_layout` and `save_layout`) points at a `.xmms` stylesheet inside the root to validate against instead of the default skin. It is read-only validation context, so widgets and styles the layout references resolve against your game's stylesheet rather than Myra's built-in one.
 
@@ -50,6 +52,7 @@ Result shapes:
 * `error` (a diagnostic) is `{ message, kind, line?, column? }`, where `kind` is one of `unknown-tag`, `unknown-property`, `bad-value`, `xml-syntax`, `asset`, or `other`. Line and column are always present for `xml-syntax` errors and best-effort otherwise.
 * `save_layout` writes your MML verbatim. An invalid layout is refused unless `force` is `true`. `valid` reports validation independently of whether the file was written.
 * `property` is `{ name, type, isAttribute, default?, enumValues? }`. `attachedProperty` is `{ owner, name, syntax, type }` (for example `syntax` `Grid.Row`).
+* `inspect_stylesheet` returns `{ styles, fonts, atlasRegions }`, where `styles` is a list of `{ widget, names }` (the named styles referenceable via a widget's `StyleName`), `fonts` the defined font ids, and `atlasRegions` the atlas region (drawable) names. Omit `stylesheetPath` to inspect the built-in default skin.
 
 ## Connecting an agent
 
