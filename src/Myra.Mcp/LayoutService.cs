@@ -1,5 +1,7 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
+using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -101,6 +103,32 @@ public sealed class LayoutService
         return new SaveResult(true, validation.Valid, validation.Error, full);
     }
 
+    /// <summary>
+    /// Arranges raw <paramref name="mml"/> at a <paramref name="viewportWidth"/> x <paramref name="viewportHeight"/>
+    /// viewport and returns every widget's arranged rectangle plus zero-size / out-of-viewport (clipped) flags.
+    /// Asset references resolve against <paramref name="assetRoot"/> (confined) or the workspace root;
+    /// <paramref name="stylesheetPath"/> (confined) overrides the stylesheet used for measurement.
+    /// </summary>
+    public LayoutBoundsResult LayoutBounds(string mml, int viewportWidth = 1280, int viewportHeight = 720, string? assetRoot = null, string? stylesheetPath = null)
+    {
+        var root = assetRoot != null ? _workspace.Resolve(assetRoot, mustBeXmmp: false) : _workspace.Root;
+        var stylesheet = stylesheetPath != null ? _workspace.Resolve(stylesheetPath, mustBeXmmp: false) : null;
+        return LayoutBoundsCore(mml, root, stylesheet, viewportWidth, viewportHeight);
+    }
+
+    /// <summary>
+    /// Reads a confined <c>.xmmp</c> file and arranges it at the given viewport (see <see cref="LayoutBounds"/>).
+    /// Asset references resolve against the file's directory unless <paramref name="assetRoot"/> is given.
+    /// </summary>
+    public LayoutBoundsResult LayoutBoundsFile(string path, int viewportWidth = 1280, int viewportHeight = 720, string? assetRoot = null, string? stylesheetPath = null)
+    {
+        var full = _workspace.Resolve(path, mustBeXmmp: true);
+        var mml = File.ReadAllText(full);
+        var root = assetRoot != null ? _workspace.Resolve(assetRoot, mustBeXmmp: false) : Path.GetDirectoryName(full)!;
+        var stylesheet = stylesheetPath != null ? _workspace.Resolve(stylesheetPath, mustBeXmmp: false) : null;
+        return LayoutBoundsCore(mml, root, stylesheet, viewportWidth, viewportHeight);
+    }
+
     private static void TryDelete(string path)
     {
         try
@@ -123,15 +151,7 @@ public sealed class LayoutService
             MyraEngine.Initialize();
             try
             {
-                var assetManager = AssetManager.CreateFileAssetManager(assetRoot);
-                Stylesheet? customStylesheet = null;
-                if (stylesheetFullPath != null)
-                {
-                    var stylesheetManager = AssetManager.CreateFileAssetManager(Path.GetDirectoryName(stylesheetFullPath)!);
-                    customStylesheet = stylesheetManager.LoadStylesheet(Path.GetFileName(stylesheetFullPath));
-                }
-
-                var project = Project.LoadFromXml(mml, assetManager, customStylesheet);
+                var project = LoadProject(mml, assetRoot, stylesheetFullPath);
                 return new ValidationResult(true, null, RenderTree(project));
             }
             catch (XmlException xe)
@@ -143,6 +163,104 @@ public sealed class LayoutService
                 return new ValidationResult(false, Classify(ex, mml), null);
             }
         }
+    }
+
+    // Shared load path for validation and layout: creates the confined asset manager, loads an
+    // optional custom stylesheet, and parses. Throws on the first loader error (the caller catches
+    // and classifies). Must run under MyraEngine.Gate.
+    private static Project LoadProject(string mml, string assetRoot, string? stylesheetFullPath)
+    {
+        var assetManager = AssetManager.CreateFileAssetManager(assetRoot);
+        Stylesheet? customStylesheet = null;
+        if (stylesheetFullPath != null)
+        {
+            var stylesheetManager = AssetManager.CreateFileAssetManager(Path.GetDirectoryName(stylesheetFullPath)!);
+            customStylesheet = stylesheetManager.LoadStylesheet(Path.GetFileName(stylesheetFullPath));
+        }
+
+        return Project.LoadFromXml(mml, assetManager, customStylesheet);
+    }
+
+    // Loads, runs Myra's Measure/Arrange pass on the root at the viewport, and reads back each
+    // widget's rectangle. A load failure returns valid=false with a diagnostic and no widgets,
+    // mirroring ValidateCore. Runs under MyraEngine.Gate (mutates process-global engine state).
+    private static LayoutBoundsResult LayoutBoundsCore(string mml, string assetRoot, string? stylesheetFullPath, int viewportWidth, int viewportHeight)
+    {
+        if (viewportWidth <= 0 || viewportHeight <= 0)
+        {
+            throw new ArgumentException($"Viewport must be positive; got {viewportWidth}x{viewportHeight}.");
+        }
+
+        lock (MyraEngine.Gate)
+        {
+            MyraEngine.Initialize();
+            try
+            {
+                var project = LoadProject(mml, assetRoot, stylesheetFullPath);
+                var root = project.Root;
+                if (root == null)
+                {
+                    // Valid but rootless layout: nothing to arrange, no widgets to report.
+                    return new LayoutBoundsResult(true, null, viewportWidth, viewportHeight, Array.Empty<WidgetBounds>());
+                }
+
+                root.Measure(new Point(viewportWidth, viewportHeight));
+                root.Arrange(new Rectangle(0, 0, viewportWidth, viewportHeight));
+                return new LayoutBoundsResult(true, null, viewportWidth, viewportHeight, Collect(root, viewportWidth, viewportHeight));
+            }
+            catch (XmlException xe)
+            {
+                return new LayoutBoundsResult(false, new Diagnostic(xe.Message, "xml-syntax", NullIfZero(xe.LineNumber), NullIfZero(xe.LinePosition)), viewportWidth, viewportHeight, Array.Empty<WidgetBounds>());
+            }
+            catch (Exception ex)
+            {
+                return new LayoutBoundsResult(false, Classify(ex, mml), viewportWidth, viewportHeight, Array.Empty<WidgetBounds>());
+            }
+        }
+    }
+
+    // Reports the root followed by every descendant in tree order, each as its absolute viewport
+    // rectangle. Traversal tracks EFFECTIVE visibility (a widget is arranged only if it and all its
+    // ancestors are visible; Myra's containers skip invisible children during Arrange, so a hidden
+    // widget or a child of a hidden container keeps zero/stale bounds). The zeroSize/clipped
+    // layout-problem flags fire only for effectively-visible widgets, so an intentionally hidden
+    // widget is never reported as a collapsed or clipped layout bug.
+    private static WidgetBounds[] Collect(Widget root, int viewportWidth, int viewportHeight)
+    {
+        var result = new List<WidgetBounds>();
+        Walk(root, ancestorsVisible: true, result, viewportWidth, viewportHeight);
+        return result.ToArray();
+    }
+
+    private static void Walk(Widget widget, bool ancestorsVisible, List<WidgetBounds> into, int viewportWidth, int viewportHeight)
+    {
+        var visible = ancestorsVisible && widget.Visible;
+        into.Add(ToWidgetBounds(widget, visible, viewportWidth, viewportHeight));
+        foreach (var child in widget.GetChildren())
+        {
+            Walk(child, visible, into, viewportWidth, viewportHeight);
+        }
+    }
+
+    // SHORTCUT: rotation/scale are not decomposed into an axis-aligned box - Width/Height are the
+    // un-rotated Bounds size at the transformed origin. Upgrade if rotated layouts need a true AABB:
+    // compute it from the four transformed corners via ToGlobal.
+    private static WidgetBounds ToWidgetBounds(Widget widget, bool visible, int viewportWidth, int viewportHeight)
+    {
+        var origin = widget.ToGlobal(Point.Empty);
+        var box = widget.Bounds;
+        var x = origin.X;
+        var y = origin.Y;
+        var width = box.Width;
+        var height = box.Height;
+
+        var zeroSize = visible && (width == 0 || height == 0);
+        var clipped = visible && (x < 0 || y < 0 || x + width > viewportWidth || y + height > viewportHeight);
+
+        return new WidgetBounds(
+            string.IsNullOrEmpty(widget.Id) ? null : widget.Id,
+            widget.GetType().Name,
+            x, y, width, height, visible, zeroSize, clipped);
     }
 
     private static int? NullIfZero(int value) => value > 0 ? value : null;

@@ -32,14 +32,14 @@ public class McpServerIntegrationTests
     }
 
     [Fact]
-    public async Task Server_exposes_exactly_the_six_tools()
+    public async Task Server_exposes_exactly_the_seven_tools()
     {
         await using var client = await ConnectAsync();
 
         var names = (await client.ListToolsAsync()).Select(t => t.Name).OrderBy(n => n).ToArray();
 
         Assert.Equal(
-            new[] { "describe_widget", "inspect_stylesheet", "list_widget_types", "read_layout", "save_layout", "validate_layout" },
+            new[] { "describe_widget", "inspect_stylesheet", "layout_bounds", "list_widget_types", "read_layout", "save_layout", "validate_layout" },
             names);
     }
 
@@ -59,7 +59,26 @@ public class McpServerIntegrationTests
         Assert.False(GetBool(bad, "valid"));
     }
 
+    [Fact]
+    public async Task layout_bounds_tool_returns_widget_bounds()
+    {
+        await using var client = await ConnectAsync();
+
+        var result = await client.CallToolAsync(
+            "layout_bounds",
+            new Dictionary<string, object?> { ["content"] = File.ReadAllText(Path.Combine(AssetsDir, "checkButton.xmmp")) });
+
+        Assert.True(GetBool(result, "valid"));
+        Assert.True(GetArrayLength(result, "widgets") > 0);
+    }
+
     private static bool GetBool(CallToolResult result, string property)
+        => GetProperty(result, property).GetBoolean();
+
+    private static int GetArrayLength(CallToolResult result, string property)
+        => GetProperty(result, property).GetArrayLength();
+
+    private static JsonElement GetProperty(CallToolResult result, string property)
     {
         var text = string.Concat(result.Content.OfType<TextContentBlock>().Select(c => c.Text));
         using var doc = JsonDocument.Parse(text);
@@ -67,7 +86,7 @@ public class McpServerIntegrationTests
         {
             if (string.Equals(member.Name, property, StringComparison.OrdinalIgnoreCase))
             {
-                return member.Value.GetBoolean();
+                return member.Value.Clone();
             }
         }
 
